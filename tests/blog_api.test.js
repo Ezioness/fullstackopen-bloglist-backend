@@ -4,7 +4,10 @@ const helper = require('./test_helper')
 const app = require('../app')
 const api = supertest(app)
 
+const bcrypt = require('bcrypt')
+
 const Blog = require('../models/blog')
+const User = require('../models/user')
 
 beforeEach(async () => {
     await Blog.deleteMany({})
@@ -37,6 +40,14 @@ describe('when there are some blogs initially saved', () => {
 })
 
 describe('addition of a blog', () => {
+    beforeEach(async () => {
+        await User.deleteMany({})
+
+        const passwordhash = await bcrypt.hash('sekret', 10)
+        const user = new User({ username: 'root', name: 'root', passwordhash })
+        await user.save()
+    })
+
     test('succeeds with valid data', async () => {
         const newBlog = {
             title: "Garen",
@@ -46,8 +57,18 @@ describe('addition of a blog', () => {
             __v: 0
         }
 
+        const user = await User.findOne({})
+
+        const authResponse = await api
+            .post('/api/login')
+            .send({
+                username: user.username,
+                password: 'sekret'
+            })
+
         await api
             .post('/api/blogs')
+            .set('Authorization', `Bearer ${authResponse.body.token}`)
             .send(newBlog)
             .expect(201)
             .expect('Content-Type', /application\/json/)
@@ -67,8 +88,18 @@ describe('addition of a blog', () => {
             __v: 0
         }
 
+        const user = await User.findOne({})
+
+        const authResponse = await api
+            .post('/api/login')
+            .send({
+                username: user.username,
+                password: 'sekret'
+            })
+
         await api
             .post('/api/blogs')
+            .set('Authorization', `Bearer ${authResponse.body.token}`)
             .send(newBlog)
             .expect(201)
             .expect('Content-Type', /application\/json/)
@@ -89,10 +120,21 @@ describe('addition of a blog', () => {
             __v: 0
         }
 
+        const user = await User.findOne({})
+        
+        const authResponse = await api
+            .post('/api/login')
+            .send({
+                username: user.username,
+                password: 'sekret'
+            })
+
         await api
             .post('/api/blogs')
+            .set('Authorization', `Bearer ${authResponse.body.token}`)
             .send(newBlog)
             .expect(400)
+            .expect('Content-Type', /application\/json/)
 
         const blogsAtEnd = await helper.blogsInDb()
         expect(blogsAtEnd).toHaveLength(helper.initialBlogs.length)
@@ -106,10 +148,39 @@ describe('addition of a blog', () => {
             __v: 0
         }
 
+        const user = await User.findOne({})
+        
+        const authResponse = await api
+            .post('/api/login')
+            .send({
+                username: user.username,
+                password: 'sekret'
+            })
+
+        await api
+            .post('/api/blogs')
+            .set('Authorization', `Bearer ${authResponse.body.token}`)
+            .send(newBlog)
+            .expect(400)
+            .expect('Content-Type', /application\/json/)
+
+        const blogsAtEnd = await helper.blogsInDb()
+        expect(blogsAtEnd).toHaveLength(helper.initialBlogs.length)
+    })
+
+    test('fails if no token is provided', async () => {
+        const newBlog = {
+            title: "Vayne",
+            author: "Riot Games",
+            likes: -999999999,
+            __v: 0
+        }
+
         await api
             .post('/api/blogs')
             .send(newBlog)
-            .expect(400)
+            .expect(401)
+            .expect('Content-Type', /application\/json/)
 
         const blogsAtEnd = await helper.blogsInDb()
         expect(blogsAtEnd).toHaveLength(helper.initialBlogs.length)
@@ -145,7 +216,7 @@ describe('updating a blog', () => {
             .put(`/api/blogs/${blogToUpdate._id}`)
             .send(blogToUpdate)
             .expect(200)
-        
+
         const blogsAtEnd = await helper.blogsInDb()
         const likes = blogsAtEnd.map(b => b.likes)
 
@@ -159,7 +230,7 @@ describe('updating a blog', () => {
             .put(`/api/blogs/${blogToUpdate._id}`)
             .send(blogToUpdate)
             .expect(400)
-        
+
         const blogsAtEnd = await helper.blogsInDb()
         const likes = blogsAtEnd.map(b => b.likes)
 
